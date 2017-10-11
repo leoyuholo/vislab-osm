@@ -16,3 +16,25 @@ services:
     ports:
       - '3000:3000'
     command: npm run dev
+  flask:
+    image: python:3
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - '5000:5000'
+    depends_on:
+      - mongo
+    environment:
+      PYTHONUSERBASE: /app/.packages
+      FLASK_APP: server
+      FLASK_DEBUG: 1
+    command: /app/.packages/bin/flask run --host=0.0.0.0
+  # pip:
+  #   image: python:3
+  #   working_dir: /app
+  #   volumes:
+  #     - .:/app
+  #   environment:
+  #     PYTHONUSERBASE: /app/.packages
+  #   command: pip install --user --upgrade --editable .

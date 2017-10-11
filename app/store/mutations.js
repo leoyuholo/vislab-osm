@@ -30,5 +30,8 @@ export default {
   },
   setLinks (state, {links}) {
     state.links = links
+  },
+  setNodes (state, {nodes}) {
+    state.nodes = nodes
   }
 }

@@ -12,7 +12,8 @@ const state = {
   zoom: null,
   lat: null,
   lng: null,
-  links: null
+  links: null,
+  nodes: null
 }
 
 const store = new Vuex.Store({
