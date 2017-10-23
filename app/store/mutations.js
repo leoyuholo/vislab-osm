@@ -31,6 +31,9 @@ export default {
   setLinks (state, {links}) {
     state.links = links
   },
+  setWays (state, {ways}) {
+    state.ways = ways
+  },
   setNodes (state, {nodes}) {
     state.nodes = nodes
   }

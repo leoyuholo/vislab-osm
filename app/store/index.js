@@ -13,6 +13,7 @@ const state = {
   lat: null,
   lng: null,
   links: null,
+  ways: null,
   nodes: null
 }
 

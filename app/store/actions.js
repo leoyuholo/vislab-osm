@@ -22,8 +22,16 @@ export default {
       .then(res => res.json())
       .then(({links}) => commit('setLinks', {links}))
   },
+  getWays({commit}, {area}) {
+    return fetch('/api/ways', postOptions({area}))
+      .then(res => res.json())
+      .then(({ways}) => commit('setWays', {ways: ways}))
+  },
   getNodes({commit}, {area}) {
-    return fetch('/api/nodes', postOptions({area}))
+    // return fetch('/api/nodes', postOptions({area}))
+    //   .then(res => res.json())
+    //   .then(({nodes}) => commit('setNodes', {nodes}))
+    return fetch('/api/osm_nodes', postOptions({area}))
       .then(res => res.json())
       .then(({nodes}) => commit('setNodes', {nodes}))
   }

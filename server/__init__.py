@@ -68,3 +68,114 @@ def list_nodes():
     } for node in nodes]
 
     return jsonify({'nodes': output})
+
+@app.route('/osm_nodes', methods=['POST'])
+def list_osm_nodes():
+    area = request.json['area'] if request.json else None
+    query = {}
+    if (area):
+        query = {
+            'coordinates': {
+                '$geoWithin': {
+                    '$geometry': area
+                }
+            }
+        }
+    nodes = mongo.db.node.find(query)
+
+    output = [{
+        'id': node['id'],
+        'coordinates': {
+            'lng': node['coordinates'][0],
+            'lat': node['coordinates'][1]
+        }
+    } for node in nodes]
+
+    return jsonify({'nodes': output})
+
+@app.route('/ways', methods=['POST'])
+def list_ways():
+    area = request.json['area'] if request.json else None
+    query = {}
+    if (area):
+        query = {
+            'coordinates': {
+                '$geoWithin': {
+                    '$geometry': area
+                }
+            }
+        }
+    nodes = mongo.db.osm_node.find(query)
+
+    app.logger.info(query)
+
+    nodes = [node for node in nodes]
+
+    node_ids = [node['id'] for node in nodes]
+    nodes = dict(zip([node['id'] for node in nodes], nodes))
+
+    query = {
+        'nd': {
+            '$in': node_ids
+        },
+        'highway': {
+            '$exists': True,
+            '$nin': [
+                "proposed",
+                "raceway",
+                "escape",
+                # "road",
+                "rest_area",
+                "path",
+                "footway",
+                "track",
+                "tertiary_link",
+                "construction",
+                # "primary",
+                "elevator",
+                # "primary_link",
+                "cycleway",
+                "service",
+                "residential",
+                # "trunk",
+                # "motorway_link",
+                # "trunk_link",
+                # "motorway",
+                "services",
+                "unclassified",
+                "tertiary",
+                # "secondary_link",
+                "pedestrian",
+                "steps",
+                # "secondary",
+                "living_street"
+            ]
+        },
+        'vehicle': {
+            '$exists': False
+        }
+    }
+
+    ways = mongo.db.way.find(query)
+
+    # output = [{
+    #     'id': way['id'],
+    #     'coordinates': [{
+    #         'lat': node['coordinates'][1],
+    #         'lng': node['coordinates'][0]
+    #     } for node in way['nodes']]
+    # } for way in ways]
+
+    output = [{
+        'id': way['id'],
+        'highway': way['highway'],
+        'coordinates': [{
+            'id': nodes[nd]['id'],
+            'lat': nodes[nd]['coordinates'][1],
+            'lng': nodes[nd]['coordinates'][0]
+        } for nd in way['nd'] if nd in nodes]
+    } for way in ways]
+
+    app.logger.info(output[0])
+
+    return jsonify({'ways': output})
