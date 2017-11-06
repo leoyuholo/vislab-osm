@@ -14,23 +14,17 @@ def list_links():
     query = {}
     if (area):
         query = {
-            '$or': [
-                    {
-                        'source_position': {
-                            '$geoWithin': {
-                                '$geometry': area
-                            }
-                        }
-                    }, {
-                        'target_position': {
-                            '$geoWithin': {
-                                '$geometry': area
-                            }
+            'path': {
+                '$elemMatch': {
+                    'coordinates': {
+                        '$geoWithin': {
+                            '$geometry': area
                         }
                     }
-                ]
+                }
+            }
         }
-    links = mongo.db.hk_link.find(query)
+    links = list(mongo.db.osm_links.find(query))
 
     output = [{
         'id': link['id'],
@@ -40,6 +34,11 @@ def list_links():
             {'lng': link['source_position'][0], 'lat': link['source_position'][1]},
             {'lng': link['target_position'][0], 'lat': link['target_position'][1]}
         ],
+        'path': [{
+            'id': node['id'],
+            'lng': node['coordinates'][0],
+            'lat': node['coordinates'][1]
+        } for node in link['path']],
         'region': link['region'],
         'type': link['type']
     } for link in links]
@@ -81,7 +80,7 @@ def list_osm_nodes():
                 }
             }
         }
-    nodes = mongo.db.node.find(query)
+    nodes = mongo.db.osm_nodes.find(query)
 
     output = [{
         'id': node['id'],
@@ -105,9 +104,9 @@ def list_ways():
                 }
             }
         }
-    nodes = mongo.db.osm_node.find(query)
+    nodes = mongo.db.osm_nodes.find(query)
 
-    app.logger.info(query)
+    # app.logger.info(query)
 
     nodes = [node for node in nodes]
 
@@ -117,46 +116,10 @@ def list_ways():
     query = {
         'nd': {
             '$in': node_ids
-        },
-        'highway': {
-            '$exists': True,
-            '$nin': [
-                "proposed",
-                "raceway",
-                "escape",
-                # "road",
-                "rest_area",
-                "path",
-                "footway",
-                "track",
-                "tertiary_link",
-                "construction",
-                # "primary",
-                "elevator",
-                # "primary_link",
-                "cycleway",
-                "service",
-                "residential",
-                # "trunk",
-                # "motorway_link",
-                # "trunk_link",
-                # "motorway",
-                "services",
-                "unclassified",
-                "tertiary",
-                # "secondary_link",
-                "pedestrian",
-                "steps",
-                # "secondary",
-                "living_street"
-            ]
-        },
-        'vehicle': {
-            '$exists': False
         }
     }
 
-    ways = mongo.db.way.find(query)
+    ways = mongo.db.osm_ways.find(query)
 
     # output = [{
     #     'id': way['id'],
@@ -169,6 +132,11 @@ def list_ways():
     output = [{
         'id': way['id'],
         'highway': way['highway'],
+        'overlaps': [{
+            'id': nodes[nd]['id'],
+            'lat': nodes[nd]['coordinates'][1],
+            'lng': nodes[nd]['coordinates'][0]
+        } for nd, way_id in way['overlaps'].items() if nd in nodes],
         'coordinates': [{
             'id': nodes[nd]['id'],
             'lat': nodes[nd]['coordinates'][1],
@@ -176,6 +144,6 @@ def list_ways():
         } for nd in way['nd'] if nd in nodes]
     } for way in ways]
 
-    app.logger.info(output[0])
+    # app.logger.info(output[0])
 
     return jsonify({'ways': output})

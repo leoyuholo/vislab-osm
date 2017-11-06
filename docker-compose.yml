@@ -8,6 +8,22 @@ services:
       - ./volumes/mongo:/data/db
     logging:
       driver: none
+  # data:
+  #   image: python:3
+  #   working_dir: /app
+  #   volumes:
+  #     - .:/app
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "1k"
+  #       max-file: "2"
+  #   depends_on:
+  #     - mongo
+  #   environment:
+  #     PYTHONUSERBASE: /app/.packages
+  #   # command: bash -c "pip install --user joblib; pip freeze > requirements.txt"
+  #   command: python preprocess/run.py
   vue:
     image: node:8
     working_dir: /app
@@ -27,14 +43,8 @@ services:
       - mongo
     environment:
       PYTHONUSERBASE: /app/.packages
-      FLASK_APP: server
+      FLASK_APP: server/__init__.py
       FLASK_DEBUG: 1
+    # command: sleep infinity
     command: /app/.packages/bin/flask run --host=0.0.0.0
-  # pip:
-  #   image: python:3
-  #   working_dir: /app
-  #   volumes:
-  #     - .:/app
-  #   environment:
-  #     PYTHONUSERBASE: /app/.packages
-  #   command: pip install --user --upgrade --editable .
+    # command: pip install --user -r requirements.txt

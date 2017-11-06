@@ -34,5 +34,18 @@ export default {
     return fetch('/api/osm_nodes', postOptions({area}))
       .then(res => res.json())
       .then(({nodes}) => commit('setNodes', {nodes}))
+  },
+  getRoute({commit}, {start, end}) {
+    const directionsService = new google.maps.DirectionsService()
+    const request = {
+      origin: start,
+      destination: end,
+      travelMode: 'DRIVING'
+    }
+    directionsService.route(request, (result, status) => {
+      if (status == 'OK') {
+        console.log(result)
+      }
+    })
   }
 }

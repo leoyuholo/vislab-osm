@@ -4,8 +4,10 @@
       @center_changed="centerChanged" @zoom_changed="zoomChanged" @bounds_changed="boundsChanged">
       <GmapPolyline v-for="link in links" :key="link.$index" :path="link.coordinates" :options="{strokeColor: link.strokeColor}"
         @mouseover="lineMouseOver(link, $event)"/>
-      <GmapPolyline v-for="way in ways" :key="way.$index" :path="way.coordinates" :options="{strokeColor: way.strokeColor}"
-        @mouseover="lineMouseOver(way, $event)"/>
+      <GmapPolyline v-for="link in links" :key="link.$index" :path="link.path" :options="{strokeColor: 'blue'}"
+        @mouseover="lineMouseOver(link, $event)"/>
+      <!-- <GmapPolyline v-for="way in ways" :key="way.$index" :path="way.coordinates" :options="{strokeColor: way.strokeColor, strokeOpacity: 0.5}"
+        @mouseover="lineMouseOver(way, $event)"/> -->
       <!-- <GmapMarker v-for="node in nodes" :key="node.$index" :position="node"
         @mouseover="markerMouseOver(node, $event)"/> -->
     </GmapMap>
@@ -37,21 +39,39 @@ export default {
     ways () {
       if (this.$store.state.ways)
         // return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: colorHash.hex(way.id)}))
-        return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: colorHash.hex(way.highway)}))
-        // return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: 'green'}))
+        // return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: colorHash.hex(way.highway)}))
+        return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: 'green'}))
       else
         return null
     },
     nodes () {
       if (this.$store.state.ways)
-        return this.$store.state.ways.map(way => way.coordinates).reduce((a, b) => a.concat(b), [])
+        // return this.$store.state.ways.map(way => way.coordinates).reduce((a, b) => a.concat(b), [])
+        return this.$store.state.ways.map(way => way.overlaps).reduce((a, b) => a.concat(b), [])
       else
         return null
     }
   },
   methods: {
+    drawDirection (start, end) {
+      const directionsService = new google.maps.DirectionsService()
+      const directionDisplay = new google.maps.DirectionsRenderer({preserveViewport:true})
+      directionDisplay.setMap(this.$refs.map.$mapObject)
+      directionsService.route({
+        origin: start,
+        destination: end,
+        travelMode: 'DRIVING'
+      }, (result, status) => {
+        if (status === 'OK') {
+          directionDisplay.setDirections(result)
+        } else {
+          console.log('directionsService failed', status, result)
+        }
+      })
+    },
     lineMouseOver (link, e) {
-      console.log('lineMouseOver', 'id', link.id, 'highway', link.highway, 'start', link.coordinates[0].lat, link.coordinates[0].lng, 'end', link.coordinates[1].lat, link.coordinates[1].lng)
+      // this.drawDirection(link.coordinates[0], link.coordinates[1])
+      console.log('lineMouseOver', 'id', link.id, 'highway', link.highway, 'start', link.coordinates[0].id, link.coordinates[0].lat, link.coordinates[0].lng, 'end', link.coordinates[link.coordinates.length-1].id, link.coordinates[link.coordinates.length-1].lat, link.coordinates[link.coordinates.length-1].lng)
     },
     markerMouseOver (node, e) {
       console.log('markerMouseOver', 'pos', node.coordinates.lat, node.coordinates.lng)
