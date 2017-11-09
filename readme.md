@@ -8,7 +8,9 @@ The given data, starting points and end points, and the collected Open Street Ma
 
 Start points and end points are given in pair, with respective latitude and longitude. When ploting on map:
 
-![ss1](screenshots/ss1.png)Screenshot 1: A sample pair of given start points (marker A) and end points (marker B)
+![ss1](screenshots/ss1.png)
+
+Screenshot 1: A sample pair of given start points (marker A) and end points (marker B)
 
 Obviously, a direct line drawn from starting point to ending point is not a drivable path in real world.
 
