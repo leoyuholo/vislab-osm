@@ -132,11 +132,6 @@ def list_ways():
     output = [{
         'id': way['id'],
         'highway': way['highway'],
-        'overlaps': [{
-            'id': nodes[nd]['id'],
-            'lat': nodes[nd]['coordinates'][1],
-            'lng': nodes[nd]['coordinates'][0]
-        } for nd, way_id in way['overlaps'].items() if nd in nodes],
         'coordinates': [{
             'id': nodes[nd]['id'],
             'lat': nodes[nd]['coordinates'][1],

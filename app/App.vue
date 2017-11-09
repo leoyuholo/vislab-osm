@@ -2,9 +2,9 @@
   <div>
     <GmapMap style="width: 100%; height: 1000px;" :zoom="zoom" :center="center" ref="map"
       @center_changed="centerChanged" @zoom_changed="zoomChanged" @bounds_changed="boundsChanged">
-      <GmapPolyline v-for="link in links" :key="link.$index" :path="link.coordinates" :options="{strokeColor: link.strokeColor}"
+      <GmapPolyline v-for="link in links" :key="link.$index" :path="link.coordinates" :options="{strokeColor: 'red'}"
         @mouseover="lineMouseOver(link, $event)"/>
-      <GmapPolyline v-for="link in links" :key="link.$index" :path="link.path" :options="{strokeColor: 'blue'}"
+      <GmapPolyline v-for="link in links" :key="link.$index" :path="link.path" :options="{strokeColor: link.strokeColor}"
         @mouseover="lineMouseOver(link, $event)"/>
       <!-- <GmapPolyline v-for="way in ways" :key="way.$index" :path="way.coordinates" :options="{strokeColor: way.strokeColor, strokeOpacity: 0.5}"
         @mouseover="lineMouseOver(way, $event)"/> -->
@@ -32,22 +32,22 @@ export default {
     links () {
       if (this.$store.state.links)
         // return this.$store.state.links.map(link => Object.assign(link, {strokeColor: colorHash.hex(link.id)}))
-        return this.$store.state.links.map(link => Object.assign(link, {strokeColor: 'red'}))
+        // return this.$store.state.links.map(link => Object.assign(link, {strokeColor: 'red'}))
+        return this.$store.state.links.map(link => Object.assign(link, {strokeColor: 'blue'}))
       else
         return null
     },
     ways () {
       if (this.$store.state.ways)
         // return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: colorHash.hex(way.id)}))
-        // return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: colorHash.hex(way.highway)}))
-        return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: 'green'}))
+        return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: colorHash.hex(way.highway)}))
+        // return this.$store.state.ways.map(way => Object.assign(way, {strokeColor: 'yellow'}))
       else
         return null
     },
     nodes () {
       if (this.$store.state.ways)
-        // return this.$store.state.ways.map(way => way.coordinates).reduce((a, b) => a.concat(b), [])
-        return this.$store.state.ways.map(way => way.overlaps).reduce((a, b) => a.concat(b), [])
+        return this.$store.state.ways.map(link => link.coordinates).reduce((a, b) => a.concat(b), [])
       else
         return null
     }
@@ -78,7 +78,7 @@ export default {
     },
     boundsChanged: debounce(function (e) {
       this.$store.dispatch('getLinks', {area: {type: 'Polygon', coordinates: [[[e.b.b, e.f.f], [e.b.f, e.f.f], [e.b.f, e.f.b], [e.b.b, e.f.b], [e.b.b, e.f.f]]]}})
-      this.$store.dispatch('getWays', {area: {type: 'Polygon', coordinates: [[[e.b.b, e.f.f], [e.b.f, e.f.f], [e.b.f, e.f.b], [e.b.b, e.f.b], [e.b.b, e.f.f]]]}})
+      // this.$store.dispatch('getWays', {area: {type: 'Polygon', coordinates: [[[e.b.b, e.f.f], [e.b.f, e.f.f], [e.b.f, e.f.b], [e.b.b, e.f.b], [e.b.b, e.f.f]]]}})
       // this.$store.dispatch('getNodes', {area: {type: 'Polygon', coordinates: [[[e.b.b, e.f.f], [e.b.f, e.f.f], [e.b.f, e.f.b], [e.b.b, e.f.b], [e.b.b, e.f.f]]]}})
     }, 1000),
     zoomChanged: debounce(function (zoom) {

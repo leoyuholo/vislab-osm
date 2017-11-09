@@ -1,12 +1,14 @@
 import drop_collections
 import filter_nodes
-import find_way_intersects
+import lookup_nodes
+import build_edges
 import find_link_paths
 
 def run():
     drop_collections.run()
     # filter_nodes.run()
-    # find_way_intersects.run()
+    # lookup_nodes.run()
+    # build_edges.run()
     find_link_paths.run()
 
 run()

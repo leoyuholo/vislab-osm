@@ -2,10 +2,40 @@ from joblib import Parallel, delayed
 import multiprocessing
 import pdb
 import sys
+import math
 
 import pydash
 
 import mongo
+
+START_LIMIT = 16
+START_RADIUS = 1600
+END_LIMIT = 16
+END_RADIUS = 1600
+COST = 10 * 1000
+
+def deg2rad (deg):
+    return deg * math.pi / 180.0
+
+def coor_distance(coor1, coor2):
+    [lon1, lat1] = coor1
+    [lon2, lat2] = coor2
+
+    R = 6371000.0
+    dlat = deg2rad(lat2 - lat1)
+    dlon = deg2rad(lon2 - lon1)
+    a = math.sin(dlat / 2.0) * math.sin(dlat / 2.0) + \
+        math.cos(deg2rad(lat1)) * math.cos(deg2rad(lat2)) * \
+        math.sin(dlon / 2.0) * math.sin(dlon / 2.0)
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    d = R * c
+    return d
+
+def find_edges(node):
+    query = {
+        'from.id': node['id']
+    }
+    return list(mongo.db.osm_edges.find(query))
 
 def find_closest_pts(coordinates, maxDistance=200, limit=5):
     pipeline = [
@@ -25,132 +55,127 @@ def find_closest_pts(coordinates, maxDistance=200, limit=5):
 
     return list(mongo.db.osm_nodes.aggregate(pipeline))
 
-def find_ways_by_nd(nd):
-    query = {
-        'nd': nd
-    }
+def init_node(node, previous=None, cost=0, start=None, end=None):
+    node['previous'] = previous
+    node['cost'] = cost
+    node['start'] = start
+    node['end'] = end
 
-    return list(mongo.db.osm_ways.find(query))
+    return node
 
-def find_way_by_id(way_id):
-    query = {
-        'id': way_id
-    }
-
-    return mongo.db.osm_ways.find_one(query)
-
-def find_node_by_id(nd):
-    query = {
-        'id': nd
-    }
-
-    return mongo.db.osm_nodes.find_one(query)
-
-def init_way(way, previous=None, intersect=None, cost=0):
-    way['previous'] = previous
-    way['intersect'] = intersect
-    way['cost'] = cost
-
-    return way
-
-def init_start_pts(start_pts):
+def init_start_nodes(start_nodes, start_coor):
     return [
-        init_way(way, intersect=pt['id'], cost=pt['distance'])
-    for pt in start_pts
-    for way in find_ways_by_nd(pt['id'])]
+        init_node(node, cost=node['distance']**2, start=start_coor)
+    for node in start_nodes]
 
-def pick_way(ways):
-    return pydash.min_by(ways, 'cost')
-
-def expand(orig_way):
-    def expand_cost(orig_way, way, intersect):
-        return orig_way['cost'] + 1
-
+def init_goal_nodes(end_nodes, end_coor):
     return [
-        init_way(way, previous=orig_way, intersect=nd, cost=expand_cost(orig_way, way, nd))
-    for nd, way_ids in orig_way['overlaps'].items()
-    for way in [find_way_by_id(way_id) for way_id in way_ids]]
+        init_node(node, cost=node['distance']**2, end=end_coor)
+    for node in end_nodes]
 
-def way_distance(way, pt_id1, pt_id2):
-    return abs(way['nd'].index(pt_id1) - way['nd'].index(pt_id2))
+def pick_node(nodes, target_coor):
+    return pydash.min_by(nodes, lambda n: n['cost'] + coor_distance(n['coordinates'], target_coor))
 
-def check_goal(end_pts, way):
-    end_pts = pydash.key_by(end_pts, 'id')
-    end_pt_ids = end_pts.keys()
+def check_goal(pick):
+    return 'goal' in pick and pick['goal'] == True
 
-    goals = [
-        (end_pts[nd]['distance'], nd)
-    for indx, nd in enumerate(way['nd']) if nd in end_pt_ids]
+def expand(node, visited_node_ids, goal_nodes):
+    edges = find_edges(node)
+    edges = pydash.filter_(edges, lambda edge: edge['to']['id'] not in visited_node_ids)
+    neighbours = [
+        init_node(edge['to'], previous=node, cost=node['cost'] + coor_distance(node['coordinates'], edge['to']['coordinates']) * (1 + edge['penalty']))
+    for edge in edges]
 
-    return None if len(goals) == 0 else pydash.min_by(goals, 0)[1]
+    neighbours += [
+        init_node({
+            'id': n['id'] + '-end',
+            'coordinates': n['end'],
+            'goal': True
+        }, previous=node, cost=node['cost'] + n['cost'])
+    for n in goal_nodes if n['id'] == node['id']]
 
-def trace_nd(nds, from_nd, to_nd):
-    from_idx = nds.index(from_nd)
-    to_idx = nds.index(to_nd)
-    # pdb.set_trace()
-    if (from_idx < to_idx):
-        return nds[from_idx:to_idx+1]
-    else:
-        return list(reversed(nds[to_idx:from_idx+1]))
+    return neighbours
 
-def trace_way(way):
-    path = trace_nd(way['nd'], way['end'], way['intersect'])
-    end = way['intersect']
-    while way['previous']:
-        way = way['previous']
-        path += trace_nd(way['nd'], end, way['intersect'])
-        end = way['intersect']
-    return path[::-1]
+def traceback(node):
+    if node['start']:
+        return [{
+            'id': node['id'] + '-start',
+            'coordinates': node['start'],
+            'cost': 0
+        }]
+    return [{
+        'id': node['id'],
+        'coordinates': node['coordinates'],
+        'cost': node['cost']
+    }] + traceback(node['previous'])
 
-def end_way(way, goal):
-    way['end'] = goal
-    return trace_way(way)
+def find_path(start_coor, end_coor, start_limit=16, start_radius=200, end_limit=16, end_radius=200):
+    if start_limit > START_LIMIT:
+        raise Exception(f'start_limit: {start_limit} exceed maximum {START_LIMIT}')
+    if end_limit > END_LIMIT:
+        raise Exception(f'end_limit: {end_limit} exceed maximum {END_LIMIT}')
 
-def find_path(link):
-    start_pts = find_closest_pts(link['source_position'], limit=5)
-    end_pts = find_closest_pts(link['target_position'], limit=2)
+    start_nodes = find_closest_pts(start_coor, maxDistance=start_radius, limit=start_limit)
+    end_nodes = find_closest_pts(end_coor, maxDistance=end_radius, limit=end_limit)
 
-    # print('start_pts: ' + str(len(start_pts)))
-    # print([pt['id'] for pt in start_pts])
-    # print('end_pts: ' + str(len(end_pts)))
-    # print([pt['id'] for pt in end_pts])
+    if len(start_nodes) < start_limit and start_radius < START_RADIUS:
+        return find_path(start_coor, end_coor, start_limit, start_radius*2, end_limit, end_radius)
+    if len(end_nodes) < start_limit and end_radius < END_RADIUS:
+        return find_path(start_coor, end_coor, start_limit, start_radius, end_limit, end_radius*2)
 
-    current_ways = init_start_pts(start_pts)
-    # print('current_ways: ' + str(len(current_ways)))
-    if(len(current_ways) == 0):
-        raise Exception('Not routable: No starting point ' + str(len(start_pts)))
     pick = None
-    goal = None
+    goal =  None
+    current_nodes = init_start_nodes(start_nodes, start_coor)
+    visited_nodes = []
+    visited_node_ids = []
+    goal_nodes = init_goal_nodes(end_nodes, end_coor)
     while not goal:
-        pick = pick_way(current_ways)
-        current_ways = pydash.without(current_ways, pick) + expand(pick)
-        goal = check_goal(end_pts, pick)
-        # print('cost: ' + str(pick['cost']))
-        # print('current_ways: ' + str(len(current_ways)))
-        if len(current_ways) > 1000:
-            raise Exception('Not routable: Too much ways')
+        pick = pick_node(current_nodes, end_coor)
+        goal = check_goal(pick)
 
-    # print('end: ' + str(pick['cost']) + ' ' + goal)
-    # print(pick)
+        # print(f'pick: {pick["id"]} goal: {goal} cost: {pick["cost"]} visited: {pick["id"] in visited_node_ids}')
 
-    path = end_way(pick, goal)
+        visited_nodes += [pick]
+        visited_node_ids += [pick['id']]
+        current_nodes = pydash.without(current_nodes, pick) + expand(pick, visited_node_ids, goal_nodes)
+        print(f'current_nodes: {len(current_nodes)}')
+        # print(f'visited_nodes: {len(visited_nodes)}')
+        # print(f'visited_node_ids: {len(visited_node_ids)}')
 
-    # print(path)
+        # if pick['cost'] > 10*1000:
+        #     raise Exception('cost larger than 10000m')
 
-    return path
+        # if len(current_nodes) > 1000:
+        #     raise Exception('current_nodes larger than 1000')
+
+        if len(current_nodes) == 0 or pick['cost'] > COST:
+            if (start_limit / start_radius) > (end_limit / end_radius):
+                return find_path(start_coor, end_coor, start_limit*2, start_radius, end_limit, end_radius)
+            else:
+                return find_path(start_coor, end_coor, start_limit, start_radius, end_limit*2, end_radius)
+
+    path = traceback(pick)
+
+    return list(reversed(path)), pick['cost']
+
 
 def find_link_path(link):
-    link['path'] = [find_node_by_id(nd) for nd in find_path(link)]
+    path1, cost1 = find_path(link['source_position'], link['target_position'])
+    # path2, cost2 = find_path(link['target_position'], link['source_position'])
+
+    # link['path'] = path2 if cost2 < cost1 else path1
+    link['path'] = path1
 
     return mongo.db.osm_links.insert_one(link).inserted_id
 
 def work(link):
-    # print('start finding path for link: ' + link['id'])
     result = ''
     try:
+        inserted_id = find_link_path(link)
         result = {
             'ok': True,
-            '_id': find_link_path(link)
+            'id': link['id'],
+            '_id': inserted_id
         }
     except Exception as e:
         print(f"link {link['id']} failed: {str(e)}")
@@ -160,20 +185,15 @@ def work(link):
             'error': str(e)
         }
         pass
-    # print('finished finding path for link: ' + link['id'])
     return result
 
 def find_link_paths():
-    # links = [mongo.db.hk_link.find_one({'id': '993007-993008'})]
-    # links = [mongo.db.hk_link.find_one({'id': '993008-992091'})]
+    # links = list(mongo.db.hk_link.find({'id': '3470-3006'}))
     links = list(mongo.db.hk_link.find())
 
-    # results = [work(link) for link in links]
+    # results = [work(link) for link in [links[0]]]
 
-    # num_cores = multiprocessing.cpu_count()
     results = Parallel(n_jobs=32, verbose=100)(delayed(work)(link) for link in links)
-    # p = multiprocessing.Pool(num_cores - 1)
-    # results = p.map(work, links)
 
     print('results: ' + str(len(results)))
     print('success: ' + str(len([result for result in results if result['ok']])))
@@ -181,12 +201,4 @@ def find_link_paths():
     print([result for result in results if not result['ok']])
 
 def run():
-    # print(trace_nd([1,2,3,4,5], 2, 3))
-    # print(trace_nd([1,2,3,4,5], 3, 2))
-    # print(trace_nd([1,2,3,4,5], 2, 4))
-    # print(trace_nd([1,2,3,4,5], 4, 2))
-    # print(trace_nd([1,2,3,4,5], 1, 5))
-    # print(trace_nd([1,2,3,4,5], 5, 1))
-    # print(trace_nd([1,2,3,4,5], 4, 1))
-    print('start find_link_paths')
     find_link_paths()

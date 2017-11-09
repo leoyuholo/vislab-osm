@@ -13,7 +13,8 @@ def filter_ways():
                 "trunk_link",
                 "motorway",
                 "secondary_link",
-                "secondary"
+                "secondary",
+                "residential"
             ]
         }
     }
@@ -43,6 +44,7 @@ def filter_nodes():
         ]
         return node
 
+    mongo.db.osm_nodes.create_index([('id', pymongo.ASCENDING)])
     mongo.db.osm_nodes.create_index([('coordinates', '2dsphere')])
     result = mongo.db.osm_nodes.insert_many([transform_node(node) for node in nodes])
     print('nodes inerted: ' + str(len(result.inserted_ids)))
